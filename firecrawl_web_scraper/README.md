@@ -1,6 +1,6 @@
 # Firecrawl Web Scraper Helper
 
-A small standalone Poetry project that wraps the Firecrawl Search API behind a stable Python function for xFloor's web-search fallback flow.
+A small standalone Poetry project that wraps the official Firecrawl Python SDK behind a stable Python function for xFloor's web-search fallback flow.
 
 ## Public API
 
@@ -78,7 +78,7 @@ firecrawl_web_scraper/
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `FIRECRAWL_API_KEY` | Yes | Bearer token used for the Firecrawl Search API. |
+| `FIRECRAWL_API_KEY` | Yes | API key used by the official Firecrawl Python SDK. |
 
 ## Query-building behavior
 
@@ -90,7 +90,16 @@ The helper builds a deterministic, context-aware Firecrawl query by:
 - inferring GitHub intent from terms like `github`, `repo`, `open source`, or `code examples`,
 - inferring a time-sensitive `tbs` hint for queries that mention terms such as `today`, `latest`, or `this week`.
 
-The Firecrawl request uses:
+The helper uses the official Python SDK pattern:
+
+```python
+from firecrawl import Firecrawl
+
+firecrawl = Firecrawl(api_key="fc-YOUR-API-KEY")
+results = firecrawl.search(query="firecrawl", limit=3)
+```
+
+The request sent through the SDK uses:
 
 - `sources=["web"]`,
 - `limit=<function arg>`,

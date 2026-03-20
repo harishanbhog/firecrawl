@@ -6,7 +6,7 @@ import importlib
 import logging
 from typing import Any
 
-from .config import DEFAULT_TIMEOUT_SECONDS, FIRECRAWL_SEARCH_URL, get_firecrawl_api_key
+from .config import DEFAULT_TIMEOUT_SECONDS, get_firecrawl_api_key
 from .normalizer import normalize_firecrawl_response
 from .query_builder import build_search_query
 
@@ -22,21 +22,15 @@ def _build_error_response(*, query_used: str, message: str) -> dict[str, Any]:
     }
 
 
-def _load_httpx() -> Any:
-    """Load httpx lazily so tests can run even when dependencies are not installed globally."""
-    return importlib.import_module("httpx")
+def _load_firecrawl_sdk() -> Any:
+    """Load the Firecrawl SDK lazily so tests can stub it easily."""
+    return importlib.import_module("firecrawl")
 
 
 def _perform_search_request(*, api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
-    httpx = _load_httpx()
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    with httpx.Client(timeout=DEFAULT_TIMEOUT_SECONDS) as client:
-        response = client.post(FIRECRAWL_SEARCH_URL, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
+    firecrawl_sdk = _load_firecrawl_sdk()
+    client = firecrawl_sdk.Firecrawl(api_key=api_key)
+    return client.search(**payload)
 
 
 def call_web_scraper(params: dict, *, limit: int = 5) -> dict[str, Any]:
@@ -63,12 +57,12 @@ def call_web_scraper(params: dict, *, limit: int = 5) -> dict[str, Any]:
         "query": query_used,
         "limit": safe_limit,
         "sources": ["web"],
-        "timeout": int(DEFAULT_TIMEOUT_SECONDS * 1000),
     }
     if plan.categories:
         payload["categories"] = plan.categories
     if plan.tbs:
         payload["tbs"] = plan.tbs
+    payload["timeout"] = int(DEFAULT_TIMEOUT_SECONDS * 1000)
 
     try:
         logger.info("Running Firecrawl search", extra={"query": query_used, "limit": safe_limit})
@@ -77,20 +71,11 @@ def call_web_scraper(params: dict, *, limit: int = 5) -> dict[str, Any]:
         if normalized["status"] == "error":
             logger.warning("Firecrawl search returned no usable results", extra={"query": query_used})
         return normalized
+    except ModuleNotFoundError:
+        return _build_error_response(
+            query_used=query_used,
+            message="firecrawl-py is not installed. Run `poetry install` before using this helper.",
+        )
     except Exception as exc:  # noqa: BLE001
-        try:
-            httpx = _load_httpx()
-        except ModuleNotFoundError:
-            httpx = None
-
-        if httpx and isinstance(exc, httpx.HTTPStatusError):
-            logger.warning("Firecrawl HTTP error: %s", exc)
-            return _build_error_response(
-                query_used=query_used,
-                message=f"Firecrawl HTTP error: {exc.response.status_code}.",
-            )
-        if httpx and isinstance(exc, httpx.HTTPError):
-            logger.warning("Firecrawl request failed: %s", exc)
-            return _build_error_response(query_used=query_used, message="Firecrawl request failed.")
         logger.exception("Unexpected web scraper failure: %s", exc)
         return _build_error_response(query_used=query_used, message="Unexpected error while searching the web.")

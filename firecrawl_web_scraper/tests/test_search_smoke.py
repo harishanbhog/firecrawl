@@ -1,77 +1,48 @@
 from firecrawl_web_scraper.search import call_web_scraper
 
 
-class _MockResponse:
-    def __init__(self, payload: dict):
-        self._payload = payload
-        self.status_code = 200
-
-    def raise_for_status(self) -> None:
-        return None
-
-    def json(self) -> dict:
-        return self._payload
-
-
-class _MockClient:
-    def __init__(self, *args, **kwargs):
+class _MockFirecrawlClient:
+    def __init__(self, *, api_key: str):
+        self.api_key = api_key
         self.calls = []
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-    def post(self, url, headers=None, json=None):
-        self.calls.append({"url": url, "headers": headers, "json": json})
-        return _MockResponse(
-            {
-                "success": True,
-                "data": {
-                    "web": [
-                        {
-                            "title": "RVCE Events",
-                            "description": "Campus event list",
-                            "url": "https://rvce.edu/events",
-                            "summary": "Today there is a workshop on campus.",
-                        }
-                    ]
-                },
-            }
-        )
+    def search(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "status": "success",
+            "web": [
+                {
+                    "title": "RVCE Events",
+                    "description": "Campus event list",
+                    "url": "https://rvce.edu/events",
+                    "summary": "Today there is a workshop on campus.",
+                }
+            ],
+            "news": [],
+            "images": [],
+        }
 
 
-class _MockHttpxModule:
-    Client = _MockClient
+class _MockFirecrawlModule:
+    def __init__(self):
+        self.instances = []
 
-    class HTTPError(Exception):
-        pass
-
-    class HTTPStatusError(HTTPError):
-        def __init__(self, response):
-            self.response = response
-
-
-_LAST_CLIENT: _MockClient | None = None
+    def Firecrawl(self, *, api_key: str):
+        client = _MockFirecrawlClient(api_key=api_key)
+        self.instances.append(client)
+        return client
 
 
-def _load_mock_httpx():
-    return _MockHttpxModule
+_MOCK_FIRECRAWL_MODULE = _MockFirecrawlModule()
 
 
-def _mock_client_factory(*args, **kwargs):
-    global _LAST_CLIENT
-    _LAST_CLIENT = _MockClient(*args, **kwargs)
-    return _LAST_CLIENT
-
-
-_MockHttpxModule.Client = _mock_client_factory
+def _load_mock_firecrawl_sdk():
+    return _MOCK_FIRECRAWL_MODULE
 
 
 def test_call_web_scraper_returns_normalized_success(monkeypatch) -> None:
     monkeypatch.setenv("FIRECRAWL_API_KEY", "test-key")
-    monkeypatch.setattr("firecrawl_web_scraper.search._load_httpx", _load_mock_httpx)
+    monkeypatch.setattr("firecrawl_web_scraper.search._load_firecrawl_sdk", _load_mock_firecrawl_sdk)
 
     result = call_web_scraper(
         {
@@ -87,9 +58,12 @@ def test_call_web_scraper_returns_normalized_success(monkeypatch) -> None:
     assert result["error"] is None
     assert result["results"][0]["url"] == "https://rvce.edu/events"
     assert "RV College Of Engineering" in result["query_used"]
-    assert _LAST_CLIENT is not None
-    assert _LAST_CLIENT.calls[0]["json"]["sources"] == ["web"]
-    assert "scrapeOptions" not in _LAST_CLIENT.calls[0]["json"]
+    assert _MOCK_FIRECRAWL_MODULE.instances
+    client = _MOCK_FIRECRAWL_MODULE.instances[-1]
+    assert client.api_key == "test-key"
+    assert client.calls[0]["sources"] == ["web"]
+    assert client.calls[0]["limit"] == 3
+    assert "scrapeOptions" not in client.calls[0]
 
 
 def test_call_web_scraper_handles_missing_api_key(monkeypatch) -> None:
@@ -102,4 +76,22 @@ def test_call_web_scraper_handles_missing_api_key(monkeypatch) -> None:
         "query_used": "latest notices",
         "results": [],
         "error": "FIRECRAWL_API_KEY is not configured.",
+    }
+
+
+def test_call_web_scraper_handles_missing_sdk(monkeypatch) -> None:
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "test-key")
+
+    def _missing_sdk():
+        raise ModuleNotFoundError("firecrawl")
+
+    monkeypatch.setattr("firecrawl_web_scraper.search._load_firecrawl_sdk", _missing_sdk)
+
+    result = call_web_scraper({"text": "latest notices"})
+
+    assert result == {
+        "status": "error",
+        "query_used": "latest notices",
+        "results": [],
+        "error": "firecrawl-py is not installed. Run `poetry install` before using this helper.",
     }

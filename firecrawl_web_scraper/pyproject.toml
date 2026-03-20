@@ -8,7 +8,7 @@ packages = [{ include = "firecrawl_web_scraper" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-httpx = "^0.28.1"
+firecrawl-py = "*"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
