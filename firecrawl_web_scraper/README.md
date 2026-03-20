@@ -95,7 +95,8 @@ The Firecrawl request uses:
 - `sources=["web"]`,
 - `limit=<function arg>`,
 - `categories=["github"]` only when the query implies code/repository intent,
-- `scrapeOptions={"formats": ["summary"]}` for richer content,
+- standard search results by default so the helper preserves the full search result set consistently,
+- local summary derivation from the best available Firecrawl fields instead of forcing scraped-content mode on every search,
 - a bounded timeout,
 - no PDF category.
 

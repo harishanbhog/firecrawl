@@ -64,7 +64,6 @@ def call_web_scraper(params: dict, *, limit: int = 5) -> dict[str, Any]:
         "limit": safe_limit,
         "sources": ["web"],
         "timeout": int(DEFAULT_TIMEOUT_SECONDS * 1000),
-        "scrapeOptions": {"formats": ["summary"]},
     }
     if plan.categories:
         payload["categories"] = plan.categories

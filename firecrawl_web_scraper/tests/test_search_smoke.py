@@ -53,9 +53,25 @@ class _MockHttpxModule:
             self.response = response
 
 
+_LAST_CLIENT: _MockClient | None = None
+
+
+def _load_mock_httpx():
+    return _MockHttpxModule
+
+
+def _mock_client_factory(*args, **kwargs):
+    global _LAST_CLIENT
+    _LAST_CLIENT = _MockClient(*args, **kwargs)
+    return _LAST_CLIENT
+
+
+_MockHttpxModule.Client = _mock_client_factory
+
+
 def test_call_web_scraper_returns_normalized_success(monkeypatch) -> None:
     monkeypatch.setenv("FIRECRAWL_API_KEY", "test-key")
-    monkeypatch.setattr("firecrawl_web_scraper.search._load_httpx", lambda: _MockHttpxModule)
+    monkeypatch.setattr("firecrawl_web_scraper.search._load_httpx", _load_mock_httpx)
 
     result = call_web_scraper(
         {
@@ -71,6 +87,9 @@ def test_call_web_scraper_returns_normalized_success(monkeypatch) -> None:
     assert result["error"] is None
     assert result["results"][0]["url"] == "https://rvce.edu/events"
     assert "RV College Of Engineering" in result["query_used"]
+    assert _LAST_CLIENT is not None
+    assert _LAST_CLIENT.calls[0]["json"]["sources"] == ["web"]
+    assert "scrapeOptions" not in _LAST_CLIENT.calls[0]["json"]
 
 
 def test_call_web_scraper_handles_missing_api_key(monkeypatch) -> None:

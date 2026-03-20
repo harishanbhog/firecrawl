@@ -65,17 +65,39 @@ def _derive_summary(item: dict) -> str:
     )
 
 
+def _extract_result_buckets(payload: dict) -> tuple[bool, dict]:
+    """Extract Firecrawl result buckets from the supported response shapes."""
+    success = payload.get("success")
+    if success is None:
+        success = payload.get("status") == "success"
+
+    if not success:
+        return False, {}
+
+    data = payload.get("data")
+    if isinstance(data, dict):
+        return True, data
+    if isinstance(data, list):
+        return True, {"web": data, "news": [], "images": []}
+    if any(key in payload for key in ("web", "news", "images")):
+        return True, {
+            "web": payload.get("web") or [],
+            "news": payload.get("news") or [],
+            "images": payload.get("images") or [],
+        }
+    return True, {}
+
+
 def normalize_firecrawl_response(payload: dict, *, query_used: str, limit: int) -> dict:
     """Normalize a Firecrawl response into the stable helper contract."""
-    if not payload.get("success"):
+    success, data = _extract_result_buckets(payload)
+    if not success:
         return {
             "status": "error",
             "query_used": query_used,
             "results": [],
             "error": "Firecrawl search was unsuccessful.",
         }
-
-    data = payload.get("data")
     if not isinstance(data, dict):
         return {
             "status": "error",

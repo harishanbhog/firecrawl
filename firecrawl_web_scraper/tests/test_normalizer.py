@@ -56,3 +56,49 @@ def test_normalize_firecrawl_response_errors_on_empty_results() -> None:
         "results": [],
         "error": "Firecrawl returned no usable results.",
     }
+
+
+def test_normalize_firecrawl_response_supports_top_level_playground_shape() -> None:
+    payload = {
+        "status": "success",
+        "web": [
+            {
+                "title": "Events - RVCE Main",
+                "description": "Upcoming events section.",
+                "url": "https://rvce.edu.in/events/",
+            },
+            {
+                "title": "Calendar of Events - RVCE Main",
+                "description": "Academic and campus events.",
+                "url": "https://rvce.edu.in/calendar-of-events/",
+            },
+        ],
+        "news": [],
+        "images": [],
+    }
+
+    normalized = normalize_firecrawl_response(payload, query_used="events rvce", limit=5)
+
+    assert normalized["status"] == "success"
+    assert len(normalized["results"]) == 2
+    assert normalized["results"][0]["url"] == "https://rvce.edu.in/events/"
+
+
+def test_normalize_firecrawl_response_supports_scraped_list_shape() -> None:
+    payload = {
+        "success": True,
+        "data": [
+            {
+                "title": "Firecrawl Search Result",
+                "description": "Scraped content response item.",
+                "url": "https://example.com/result",
+                "markdown": "# Heading\nUseful content",
+            }
+        ],
+    }
+
+    normalized = normalize_firecrawl_response(payload, query_used="scraped", limit=5)
+
+    assert normalized["status"] == "success"
+    assert normalized["results"][0]["url"] == "https://example.com/result"
+    assert "Scraped content response item." in normalized["results"][0]["summary"]
