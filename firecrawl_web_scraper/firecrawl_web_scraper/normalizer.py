@@ -5,6 +5,30 @@ from __future__ import annotations
 from .utils import first_non_empty, truncate_text, unique_strings, url_host
 
 
+def _to_plain_data(value):
+    """Recursively coerce SDK response objects into plain Python data structures."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {key: _to_plain_data(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_to_plain_data(item) for item in value]
+
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return _to_plain_data(model_dump())
+
+    dict_method = getattr(value, "dict", None)
+    if callable(dict_method):
+        return _to_plain_data(dict_method())
+
+    object_dict = getattr(value, "__dict__", None)
+    if isinstance(object_dict, dict) and object_dict:
+        return {key: _to_plain_data(item) for key, item in object_dict.items() if not key.startswith("_")}
+
+    return value
+
+
 def _extract_media(item: dict, image_lookup: dict[str, list[str]]) -> list[str]:
     direct_media = unique_strings(
         [
@@ -67,9 +91,16 @@ def _derive_summary(item: dict) -> str:
 
 def _extract_result_buckets(payload: dict) -> tuple[bool, dict]:
     """Extract Firecrawl result buckets from the supported response shapes."""
+    payload = _to_plain_data(payload)
+    if not isinstance(payload, dict):
+        return False, {}
+
     success = payload.get("success")
     if success is None:
-        success = payload.get("status") == "success"
+        status = payload.get("status")
+        success = True if status == "success" else None if status is None else False
+    if success is None and any(key in payload for key in ("web", "news", "images")):
+        success = True
 
     if not success:
         return False, {}

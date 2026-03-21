@@ -27,7 +27,7 @@ def _load_firecrawl_sdk() -> Any:
     return importlib.import_module("firecrawl")
 
 
-def _perform_search_request(*, api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _perform_search_request(*, api_key: str, payload: dict[str, Any]) -> Any:
     firecrawl_sdk = _load_firecrawl_sdk()
     client = firecrawl_sdk.Firecrawl(api_key=api_key)
     return client.search(**payload)

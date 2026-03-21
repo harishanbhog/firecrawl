@@ -1,6 +1,14 @@
 from firecrawl_web_scraper.normalizer import normalize_firecrawl_response
 
 
+class _FakeSDKModel:
+    def __init__(self, **payload):
+        self._payload = payload
+
+    def model_dump(self):
+        return self._payload
+
+
 def test_normalize_firecrawl_response_merges_and_deduplicates_results() -> None:
     payload = {
         "success": True,
@@ -102,3 +110,22 @@ def test_normalize_firecrawl_response_supports_scraped_list_shape() -> None:
     assert normalized["status"] == "success"
     assert normalized["results"][0]["url"] == "https://example.com/result"
     assert "Scraped content response item." in normalized["results"][0]["summary"]
+
+
+def test_normalize_firecrawl_response_supports_sdk_model_objects() -> None:
+    payload = _FakeSDKModel(
+        web=[
+            _FakeSDKModel(
+                title="SDK Result",
+                description="Returned from the SDK model.",
+                url="https://example.com/sdk-result",
+            )
+        ],
+        news=[],
+        images=[],
+    )
+
+    normalized = normalize_firecrawl_response(payload, query_used="sdk", limit=5)
+
+    assert normalized["status"] == "success"
+    assert normalized["results"][0]["url"] == "https://example.com/sdk-result"
