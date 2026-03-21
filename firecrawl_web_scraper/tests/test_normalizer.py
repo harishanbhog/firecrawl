@@ -57,6 +57,17 @@ def test_normalize_firecrawl_response_merges_and_deduplicates_results() -> None:
         "https://example.edu/events",
         "https://news.example.edu/post",
     ]
+    assert [item["url"] for item in normalized["web"]] == ["https://example.edu/events"]
+    assert [item["url"] for item in normalized["news"]] == ["https://news.example.edu/post"]
+    assert normalized["images"] == [
+        {
+            "title": "",
+            "description": "",
+            "url": "https://example.edu/events",
+            "media": ["https://cdn.example.edu/event.jpg"],
+            "summary": "",
+        }
+    ]
     assert normalized["results"][0]["media"] == ["https://cdn.example.edu/event.jpg"]
     assert normalized["results"][1]["summary"] == "Recent update"
 
@@ -68,6 +79,9 @@ def test_normalize_firecrawl_response_errors_on_empty_results() -> None:
         "status": "error",
         "query_used": "q",
         "results": [],
+        "web": [],
+        "news": [],
+        "images": [],
         "error": "Firecrawl returned no usable results.",
     }
 
@@ -96,6 +110,9 @@ def test_normalize_firecrawl_response_supports_top_level_playground_shape() -> N
     assert normalized["status"] == "success"
     assert len(normalized["results"]) == 2
     assert normalized["results"][0]["url"] == "https://rvce.edu.in/events/"
+    assert len(normalized["web"]) == 2
+    assert normalized["news"] == []
+    assert normalized["images"] == []
 
 
 def test_normalize_firecrawl_response_supports_scraped_list_shape() -> None:
@@ -116,6 +133,7 @@ def test_normalize_firecrawl_response_supports_scraped_list_shape() -> None:
     assert normalized["status"] == "success"
     assert normalized["results"][0]["url"] == "https://example.com/result"
     assert "Scraped content response item." in normalized["results"][0]["summary"]
+    assert normalized["web"][0]["url"] == "https://example.com/result"
 
 
 def test_normalize_firecrawl_response_supports_sdk_model_objects() -> None:
@@ -135,6 +153,7 @@ def test_normalize_firecrawl_response_supports_sdk_model_objects() -> None:
 
     assert normalized["status"] == "success"
     assert normalized["results"][0]["url"] == "https://example.com/sdk-result"
+    assert normalized["web"][0]["url"] == "https://example.com/sdk-result"
 
 
 def test_normalize_firecrawl_response_supports_direct_sdk_data_objects() -> None:
@@ -161,6 +180,10 @@ def test_normalize_firecrawl_response_supports_direct_sdk_data_objects() -> None
 
     assert normalized["status"] == "success"
     assert [item["url"] for item in normalized["results"]] == [
+        "https://rvce.edu.in/events/",
+        "https://rvce.edu.in/calendar-of-events/",
+    ]
+    assert [item["url"] for item in normalized["web"]] == [
         "https://rvce.edu.in/events/",
         "https://rvce.edu.in/calendar-of-events/",
     ]

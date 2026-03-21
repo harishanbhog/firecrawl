@@ -25,6 +25,9 @@ The function always returns a normalized JSON-like dictionary shaped for xFloor 
             "summary": "...",
         }
     ],
+    "web": [...],
+    "news": [...],
+    "images": [...],
     "error": None | "human readable message",
 }
 ```
@@ -101,13 +104,24 @@ results = firecrawl.search(query="firecrawl", limit=3)
 
 The request sent through the SDK uses:
 
-- `sources=["web"]`,
+- `sources=["web", "images", "news"]`,
 - `limit=<function arg>`,
 - `categories=["github"]` only when the query implies code/repository intent,
 - standard search results by default so the helper preserves the full search result set consistently,
 - local summary derivation from the best available Firecrawl fields instead of forcing scraped-content mode on every search,
 - a bounded timeout,
 - no PDF category.
+
+## Output shape for xFloor
+
+The helper now preserves Firecrawl's source separation while still keeping a backward-compatible flat `results` array:
+
+- `web`: normalized web search results
+- `news`: normalized news results
+- `images`: normalized image results
+- `results`: flattened combination of `web + news + images`, truncated to `limit`
+
+This means xFloor can consume the three source-specific arrays directly, while older fallback checks that only look for `results` will continue to work.
 
 ## Run the demo locally
 

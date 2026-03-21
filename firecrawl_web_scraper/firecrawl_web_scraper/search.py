@@ -18,6 +18,9 @@ def _build_error_response(*, query_used: str, message: str) -> dict[str, Any]:
         "status": "error",
         "query_used": query_used,
         "results": [],
+        "web": [],
+        "news": [],
+        "images": [],
         "error": message,
     }
 
@@ -56,7 +59,7 @@ def call_web_scraper(params: dict, *, limit: int = 5) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "query": query_used,
         "limit": safe_limit,
-        "sources": ["web"],
+        "sources": ["web", "images", "news"],
     }
     if plan.categories:
         payload["categories"] = plan.categories

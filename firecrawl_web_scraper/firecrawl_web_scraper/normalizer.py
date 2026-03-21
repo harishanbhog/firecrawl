@@ -89,6 +89,50 @@ def _derive_summary(item: dict) -> str:
     )
 
 
+def _normalize_standard_item(item: dict, *, image_lookup: dict[str, list[str]]) -> dict | None:
+    url = first_non_empty(item.get("url"), item.get("sourceURL"), item.get("sourceUrl"))
+    title = first_non_empty(item.get("title"), item.get("metadata", {}).get("title"))
+    description = truncate_text(
+        first_non_empty(
+            item.get("description"),
+            item.get("snippet"),
+            item.get("metadata", {}).get("description"),
+        ),
+        max_length=240,
+    )
+    summary = _derive_summary(item)
+
+    if not url or not (title or description or summary):
+        return None
+
+    return {
+        "title": title,
+        "description": description,
+        "url": url,
+        "media": _extract_media(item, image_lookup),
+        "summary": summary,
+    }
+
+
+def _normalize_image_item(item: dict) -> dict | None:
+    url = first_non_empty(item.get("url"), item.get("sourceURL"), item.get("sourceUrl"))
+    image_url = first_non_empty(item.get("image_url"), item.get("imageUrl"), item.get("url"))
+    title = first_non_empty(item.get("title"), item.get("alt"))
+    description = truncate_text(first_non_empty(item.get("description"), item.get("snippet")), max_length=240)
+    summary = truncate_text(first_non_empty(description, title), max_length=320)
+
+    if not (url or image_url):
+        return None
+
+    return {
+        "title": title,
+        "description": description,
+        "url": url or image_url,
+        "media": unique_strings([image_url]),
+        "summary": summary,
+    }
+
+
 def _extract_result_buckets(payload: dict) -> tuple[bool, dict]:
     """Extract Firecrawl result buckets from the supported response shapes."""
     payload = _to_plain_data(payload)
@@ -138,46 +182,57 @@ def normalize_firecrawl_response(payload: dict, *, query_used: str, limit: int) 
         }
 
     image_lookup = _build_image_lookup(data.get("images"))
-    merged_items = []
+    normalized_web: list[dict] = []
+    normalized_news: list[dict] = []
+    normalized_images: list[dict] = []
     seen_urls: set[str] = set()
 
-    for bucket_name in ("web", "news"):
-        for item in data.get(bucket_name) or []:
-            url = first_non_empty(item.get("url"), item.get("sourceURL"), item.get("sourceUrl"))
-            title = first_non_empty(item.get("title"), item.get("metadata", {}).get("title"))
-            description = truncate_text(
-                first_non_empty(
-                    item.get("description"),
-                    item.get("snippet"),
-                    item.get("metadata", {}).get("description"),
-                ),
-                max_length=240,
-            )
-            summary = _derive_summary(item)
+    for item in data.get("web") or []:
+        normalized = _normalize_standard_item(item, image_lookup=image_lookup)
+        if not normalized or normalized["url"] in seen_urls:
+            continue
+        seen_urls.add(normalized["url"])
+        normalized_web.append(normalized)
+        if len(normalized_web) >= limit:
+            break
 
-            if not url or url in seen_urls or not (title or description or summary):
-                continue
+    for item in data.get("news") or []:
+        normalized = _normalize_standard_item(item, image_lookup=image_lookup)
+        if not normalized or normalized["url"] in seen_urls:
+            continue
+        seen_urls.add(normalized["url"])
+        normalized_news.append(normalized)
+        if len(normalized_news) >= limit:
+            break
 
-            seen_urls.add(url)
-            merged_items.append(
-                {
-                    "title": title,
-                    "description": description,
-                    "url": url,
-                    "media": _extract_media(item, image_lookup),
-                    "summary": summary,
-                }
-            )
-            if len(merged_items) >= limit:
-                break
+    image_seen: set[str] = set()
+    for item in data.get("images") or []:
+        normalized = _normalize_image_item(item)
+        if not normalized or normalized["url"] in image_seen:
+            continue
+        image_seen.add(normalized["url"])
+        normalized_images.append(normalized)
+        if len(normalized_images) >= limit:
+            break
+
+    merged_items: list[dict] = []
+    result_seen_urls: set[str] = set()
+    for item in normalized_web + normalized_news + normalized_images:
+        if item["url"] in result_seen_urls:
+            continue
+        result_seen_urls.add(item["url"])
+        merged_items.append(item)
         if len(merged_items) >= limit:
             break
 
-    if not merged_items:
+    if not (normalized_web or normalized_news or normalized_images):
         return {
             "status": "error",
             "query_used": query_used,
             "results": [],
+            "web": [],
+            "news": [],
+            "images": [],
             "error": "Firecrawl returned no usable results.",
         }
 
@@ -185,5 +240,8 @@ def normalize_firecrawl_response(payload: dict, *, query_used: str, limit: int) 
         "status": "success",
         "query_used": query_used,
         "results": merged_items,
+        "web": normalized_web,
+        "news": normalized_news,
+        "images": normalized_images,
         "error": None,
     }

@@ -19,7 +19,13 @@ class _MockFirecrawlClient:
                 }
             ],
             "news": [],
-            "images": [],
+            "images": [
+                {
+                    "title": "RVCE Event Poster",
+                    "image_url": "https://rvce.edu/event.jpg",
+                    "url": "https://rvce.edu/events",
+                }
+            ],
         }
 
 
@@ -58,10 +64,12 @@ def test_call_web_scraper_returns_normalized_success(monkeypatch) -> None:
     assert result["error"] is None
     assert result["results"][0]["url"] == "https://rvce.edu/events"
     assert "RV College Of Engineering" in result["query_used"]
+    assert result["web"][0]["url"] == "https://rvce.edu/events"
+    assert result["images"][0]["media"] == ["https://rvce.edu/event.jpg"]
     assert _MOCK_FIRECRAWL_MODULE.instances
     client = _MOCK_FIRECRAWL_MODULE.instances[-1]
     assert client.api_key == "test-key"
-    assert client.calls[0]["sources"] == ["web"]
+    assert client.calls[0]["sources"] == ["web", "images", "news"]
     assert client.calls[0]["limit"] == 3
     assert "scrapeOptions" not in client.calls[0]
 
@@ -75,6 +83,9 @@ def test_call_web_scraper_handles_missing_api_key(monkeypatch) -> None:
         "status": "error",
         "query_used": "latest notices",
         "results": [],
+        "web": [],
+        "news": [],
+        "images": [],
         "error": "FIRECRAWL_API_KEY is not configured.",
     }
 
@@ -93,5 +104,8 @@ def test_call_web_scraper_handles_missing_sdk(monkeypatch) -> None:
         "status": "error",
         "query_used": "latest notices",
         "results": [],
+        "web": [],
+        "news": [],
+        "images": [],
         "error": "firecrawl-py is not installed. Run `poetry install` before using this helper.",
     }
