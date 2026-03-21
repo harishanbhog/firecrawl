@@ -9,6 +9,12 @@ class _FakeSDKModel:
         return self._payload
 
 
+class _AttrOnlySDKModel:
+    def __init__(self, **payload):
+        for key, value in payload.items():
+            setattr(self, key, value)
+
+
 def test_normalize_firecrawl_response_merges_and_deduplicates_results() -> None:
     payload = {
         "success": True,
@@ -129,3 +135,32 @@ def test_normalize_firecrawl_response_supports_sdk_model_objects() -> None:
 
     assert normalized["status"] == "success"
     assert normalized["results"][0]["url"] == "https://example.com/sdk-result"
+
+
+def test_normalize_firecrawl_response_supports_direct_sdk_data_objects() -> None:
+    payload = _AttrOnlySDKModel(
+        web=[
+            _AttrOnlySDKModel(
+                url="https://rvce.edu.in/events/",
+                title="Events - RVCE Main",
+                description="Upcoming events for RVCE.",
+                category=None,
+            ),
+            _AttrOnlySDKModel(
+                url="https://rvce.edu.in/calendar-of-events/",
+                title="Calendar of Events - RVCE Main",
+                description="Calendar details.",
+                category=None,
+            ),
+        ],
+        news=None,
+        images=None,
+    )
+
+    normalized = normalize_firecrawl_response(payload, query_used="rvce events", limit=5)
+
+    assert normalized["status"] == "success"
+    assert [item["url"] for item in normalized["results"]] == [
+        "https://rvce.edu.in/events/",
+        "https://rvce.edu.in/calendar-of-events/",
+    ]
